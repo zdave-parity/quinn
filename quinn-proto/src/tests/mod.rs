@@ -2301,6 +2301,37 @@ fn connect_too_low_mtu() {
 }
 
 #[test]
+fn handshake_packet_lost() {
+    let _guard = subscribe();
+
+    for mut loss_pattern in 0..0x10000 {
+        tracing::trace!("Loss pattern: {loss_pattern:016b}");
+
+        let mut pair = Pair::default();
+        let client_ch = pair.begin_connect(client_config());
+
+        loop {
+            pair.client.inbound.retain(|_| {
+                let keep = (loss_pattern & 2) == 0;
+                loss_pattern = (loss_pattern & 0x5555) | ((loss_pattern & 0xaaaa) >> 2);
+                keep
+            });
+            pair.drive_client();
+            if !pair.client_conn_mut(client_ch).is_handshaking() {
+                break;
+            }
+            pair.server.inbound.retain(|_| {
+                let keep = (loss_pattern & 1) == 0;
+                loss_pattern = (loss_pattern & 0xaaaa) | ((loss_pattern & 0x5555) >> 2);
+                keep
+            });
+            pair.drive_server();
+            pair.advance_to_next_wakeup();
+        }
+    }
+}
+
+#[test]
 fn connect_lost_mtu_probes_do_not_trigger_congestion_control() {
     let _guard = subscribe();
     let mut pair = Pair::default();

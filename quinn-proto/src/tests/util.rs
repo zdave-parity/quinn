@@ -88,14 +88,10 @@ impl Pair {
         }
     }
 
-    /// Returns whether the connection is not idle
-    pub(super) fn step(&mut self) -> bool {
-        self.drive_client();
-        self.drive_server();
-        if self.client.is_idle() && self.server.is_idle() {
-            return false;
-        }
-
+    /// Advance time to the next wakeup of either endpoint
+    ///
+    /// Returns false iff there are no scheduled wakeups for either endpoint
+    pub(super) fn advance_to_next_wakeup(&mut self) -> bool {
         let client_t = self.client.next_wakeup();
         let server_t = self.server.next_wakeup();
         match min_opt(client_t, server_t) {
@@ -116,6 +112,16 @@ impl Pair {
             Some(_) => unreachable!(),
             None => false,
         }
+    }
+
+    /// Returns whether the connection is not idle
+    pub(super) fn step(&mut self) -> bool {
+        self.drive_client();
+        self.drive_server();
+        if self.client.is_idle() && self.server.is_idle() {
+            return false;
+        }
+        self.advance_to_next_wakeup()
     }
 
     /// Advance time until both connections are idle
